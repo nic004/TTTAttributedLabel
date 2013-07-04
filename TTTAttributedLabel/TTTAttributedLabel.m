@@ -645,6 +645,8 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
                 CGFloat runDescent = 0.0f;
                 
                 runBounds.size.width = CTRunGetTypographicBounds((__bridge CTRunRef)glyphRun, CFRangeMake(0, 0), &runAscent, &runDescent, NULL);
+//                CGRect rect = CTRunGetImageBounds((__bridge CTRunRef)glyphRun, UIGraphicsGetCurrentContext(), CFRangeMake(0, 0));
+//                runBounds.size.height = rect.size.height;
                 runBounds.size.height = runAscent + runDescent;
                 
                 CGFloat xOffset = CTLineGetOffsetForStringIndex((__bridge CTLineRef)line, CTRunGetStringRange((__bridge CTRunRef)glyphRun).location, NULL);
@@ -655,6 +657,11 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
                 // Don't draw higlightedLinkBackground too far to the right
                 if (CGRectGetWidth(runBounds) > CGRectGetWidth(lineBounds)) {
                     runBounds.size.width = CGRectGetWidth(lineBounds);
+                }
+                
+                if (fillColor) {
+                    runBounds.origin.y += 3;
+                    runBounds.size.height -= 6;
                 }
                 
                 CGPathRef path = [[UIBezierPath bezierPathWithRoundedRect:CGRectInset(CGRectInset(runBounds, -1.0f, -3.0f), lineWidth, lineWidth) cornerRadius:cornerRadius] CGPath];
