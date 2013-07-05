@@ -192,6 +192,9 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
 - (void)drawStrike:(CTFrameRef)frame
             inRect:(CGRect)rect
            context:(CGContextRef)c;
+- (BOOL)drawHighlight:(CTFrameRef)frame
+               inRect:(CGRect)rect
+              context:(CGContextRef)c;
 @end
 
 @implementation TTTAttributedLabel {
@@ -499,7 +502,9 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
     CGPathAddRect(path, NULL, rect);
     CTFrameRef frame = CTFramesetterCreateFrame(framesetter, textRange, path, NULL);    
     
-    [self drawBackground:frame inRect:rect context:c];
+    if (![self drawHighlight:frame inRect:rect context:c]) {
+        [self drawBackground:frame inRect:rect context:c];
+    }
     
     CFArrayRef lines = CTFrameGetLines(frame);
     NSInteger numberOfLines = self.numberOfLines > 0 ? MIN(self.numberOfLines, CFArrayGetCount(lines)) : CFArrayGetCount(lines);
@@ -610,6 +615,101 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
     CFRelease(path);    
 }
 
+- (BOOL)drawHighlight:(CTFrameRef)frame
+               inRect:(CGRect)rect
+              context:(CGContextRef)c
+{
+    NSArray *lines = (__bridge NSArray *)CTFrameGetLines(frame);
+    CGPoint origins[[lines count]];
+    CTFrameGetLineOrigins(frame, CFRangeMake(0, 0), origins);
+    
+    // Compensate for y-offset of text rect from vertical positioning
+    CGFloat yOffset = 0.0f;
+    if (self.verticalAlignment != TTTAttributedLabelVerticalAlignmentTop) {
+        yOffset -= [self textRectForBounds:self.bounds limitedToNumberOfLines:self.numberOfLines].origin.y;
+    }
+    
+    NSMutableArray *boxes = [NSMutableArray array];
+    CFIndex lineIndex = 0;
+    for (id line in lines) {
+        CGFloat ascent = 0.0f, descent = 0.0f, leading = 0.0f;
+        CGFloat width = CTLineGetTypographicBounds((__bridge CTLineRef)line, &ascent, &descent, &leading) ;
+        CGRect lineBounds = CGRectMake(0.0f, 0.0f, width, ascent + descent + leading) ;
+        lineBounds.origin.x = origins[lineIndex].x;
+        lineBounds.origin.y = origins[lineIndex].y;
+        
+        NSRange previousAttributeRange = NSMakeRange(0, 0);
+        for (id glyphRun in (__bridge NSArray *)CTLineGetGlyphRuns((__bridge CTLineRef)line)) {
+            NSDictionary *attributes = (__bridge NSDictionary *)CTRunGetAttributes((__bridge CTRunRef) glyphRun);
+            CGColorRef fillColor = (__bridge CGColorRef)[attributes objectForKey:kTTTBackgroundFillColorAttributeName];
+            if (fillColor) {
+                CGRect runBounds = CGRectZero;
+                CGFloat runAscent = 0.0f;
+                CGFloat runDescent = 0.0f;
+                
+                runBounds.size.width = CTRunGetTypographicBounds((__bridge CTRunRef)glyphRun, CFRangeMake(0, 0), &runAscent, &runDescent, NULL);
+                runBounds.size.height = (ascent + descent);
+                
+                CGFloat xOffset = CTLineGetOffsetForStringIndex((__bridge CTLineRef)line, CTRunGetStringRange((__bridge CTRunRef)glyphRun).location, NULL);
+                runBounds.origin.x = origins[lineIndex].x + rect.origin.x + xOffset;
+                runBounds.origin.y = origins[lineIndex].y + rect.origin.y + yOffset;
+                runBounds.origin.y -= descent;
+                
+                // Don't draw higlightedLinkBackground too far to the right
+                if (CGRectGetWidth(runBounds) > CGRectGetWidth(lineBounds)) {
+                    runBounds.size.width = CGRectGetWidth(lineBounds);
+                }
+                
+                
+                NSString *rangeString = attributes[@"range"];
+                if (NSStringIsEmpty(rangeString)) return NO;
+                
+                NSRange attributeRange = NSRangeFromString(rangeString);
+                if (NSEqualRanges(previousAttributeRange, attributeRange)) {
+                    NSMutableDictionary *lastBox = [boxes lastObject];
+                    CGRect lastRunBounds = CGRectFromString(lastBox[@"runBounds"]);
+                    lastBox[@"runBounds"] = NSStringFromCGRect(CGRectUnion(runBounds, lastRunBounds));
+                } else {
+                    [boxes addObject:[@{@"runBounds" : NSStringFromCGRect(runBounds),
+                                        @"attributes" : attributes}
+                                      mutableCopy]];
+                }
+                previousAttributeRange = attributeRange;
+            }
+        }
+        
+        lineIndex++;
+    }
+    
+    if (boxes.count <= 0) return NO;
+    
+    for (NSDictionary *boxInfo in boxes) {
+        CGRect runBounds = CGRectFromString(boxInfo[@"runBounds"]);
+        NSDictionary *attributes = boxInfo[@"attributes"];
+        CGColorRef strokeColor = (__bridge CGColorRef)[attributes objectForKey:kTTTBackgroundStrokeColorAttributeName];
+        CGColorRef fillColor = (__bridge CGColorRef)[attributes objectForKey:kTTTBackgroundFillColorAttributeName];
+        CGFloat cornerRadius = [[attributes objectForKey:kTTTBackgroundCornerRadiusAttributeName] floatValue];
+        CGFloat lineWidth = [[attributes objectForKey:kTTTBackgroundLineWidthAttributeName] floatValue];
+        
+        CGPathRef path = [[UIBezierPath bezierPathWithRoundedRect:CGRectInset(CGRectInset(runBounds, 0, 0), lineWidth, lineWidth) cornerRadius:cornerRadius] CGPath];
+        CGContextSetLineJoin(c, kCGLineJoinRound);
+        
+        if (fillColor) {
+            CGContextSetFillColorWithColor(c, fillColor);
+            CGContextAddPath(c, path);
+            CGContextFillPath(c);
+//        CGContextFillRect(c, runBounds);
+        }
+        
+        if (strokeColor) {
+            CGContextSetStrokeColorWithColor(c, strokeColor);
+            CGContextAddPath(c, path);
+            CGContextStrokePath(c);
+        }
+    }
+    return YES;
+}
+
 - (void)drawBackground:(CTFrameRef)frame
                 inRect:(CGRect)rect
                context:(CGContextRef)c
@@ -645,8 +745,6 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
                 CGFloat runDescent = 0.0f;
                 
                 runBounds.size.width = CTRunGetTypographicBounds((__bridge CTRunRef)glyphRun, CFRangeMake(0, 0), &runAscent, &runDescent, NULL);
-//                CGRect rect = CTRunGetImageBounds((__bridge CTRunRef)glyphRun, UIGraphicsGetCurrentContext(), CFRangeMake(0, 0));
-//                runBounds.size.height = rect.size.height;
                 runBounds.size.height = runAscent + runDescent;
                 
                 CGFloat xOffset = CTLineGetOffsetForStringIndex((__bridge CTLineRef)line, CTRunGetStringRange((__bridge CTRunRef)glyphRun).location, NULL);
@@ -657,11 +755,6 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
                 // Don't draw higlightedLinkBackground too far to the right
                 if (CGRectGetWidth(runBounds) > CGRectGetWidth(lineBounds)) {
                     runBounds.size.width = CGRectGetWidth(lineBounds);
-                }
-                
-                if (fillColor) {
-                    runBounds.origin.y += 3;
-                    runBounds.size.height -= 6;
                 }
                 
                 CGPathRef path = [[UIBezierPath bezierPathWithRoundedRect:CGRectInset(CGRectInset(runBounds, -1.0f, -3.0f), lineWidth, lineWidth) cornerRadius:cornerRadius] CGPath];
