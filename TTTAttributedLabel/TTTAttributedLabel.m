@@ -686,26 +686,26 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
     for (NSDictionary *boxInfo in boxes) {
         CGRect runBounds = CGRectFromString(boxInfo[@"runBounds"]);
         NSDictionary *attributes = boxInfo[@"attributes"];
-        CGColorRef strokeColor = (__bridge CGColorRef)[attributes objectForKey:kTTTBackgroundStrokeColorAttributeName];
+//        CGColorRef strokeColor = (__bridge CGColorRef)[attributes objectForKey:kTTTBackgroundStrokeColorAttributeName];
         CGColorRef fillColor = (__bridge CGColorRef)[attributes objectForKey:kTTTBackgroundFillColorAttributeName];
-        CGFloat cornerRadius = [[attributes objectForKey:kTTTBackgroundCornerRadiusAttributeName] floatValue];
-        CGFloat lineWidth = [[attributes objectForKey:kTTTBackgroundLineWidthAttributeName] floatValue];
+//        CGFloat cornerRadius = [[attributes objectForKey:kTTTBackgroundCornerRadiusAttributeName] floatValue];
+//        CGFloat lineWidth = [[attributes objectForKey:kTTTBackgroundLineWidthAttributeName] floatValue];
         
-        CGPathRef path = [[UIBezierPath bezierPathWithRoundedRect:CGRectInset(CGRectInset(runBounds, 0, 0), lineWidth, lineWidth) cornerRadius:cornerRadius] CGPath];
-        CGContextSetLineJoin(c, kCGLineJoinRound);
+//        CGPathRef path = [[UIBezierPath bezierPathWithRoundedRect:CGRectInset(CGRectInset(runBounds, 0, 0), lineWidth, lineWidth) cornerRadius:cornerRadius] CGPath];
+//        CGContextSetLineJoin(c, kCGLineJoinRound);
         
         if (fillColor) {
             CGContextSetFillColorWithColor(c, fillColor);
-            CGContextAddPath(c, path);
-            CGContextFillPath(c);
-//        CGContextFillRect(c, runBounds);
+//            CGContextAddPath(c, path);
+//            CGContextFillPath(c);
+            CGContextFillRect(c, runBounds);
         }
         
-        if (strokeColor) {
-            CGContextSetStrokeColorWithColor(c, strokeColor);
-            CGContextAddPath(c, path);
-            CGContextStrokePath(c);
-        }
+//        if (strokeColor) {
+//            CGContextSetStrokeColorWithColor(c, strokeColor);
+//            CGContextAddPath(c, path);
+//            CGContextStrokePath(c);
+//        }
     }
     return YES;
 }
