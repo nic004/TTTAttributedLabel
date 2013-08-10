@@ -550,13 +550,20 @@ static inline NSAttributedString * NSAttributedStringBySettingColorFromContext(N
                 }
                 
                 // Get the attributes and use them to create the truncation token string
-                NSDictionary *tokenAttributes = [attributedString attributesAtIndex:truncationAttributePosition effectiveRange:NULL];
+                NSDictionary *defaultTokenAttributes = [attributedString attributesAtIndex:truncationAttributePosition effectiveRange:NULL];
+                NSMutableDictionary *tokenAttributes = [defaultTokenAttributes mutableCopy];
+                [self.trucationTokenAttributes enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+                    [tokenAttributes setValue:obj forKey:key];
+                }];
+                
                 NSString *truncationTokenString = self.truncationTokenString;
                 if (!truncationTokenString) {
                     truncationTokenString = @"\u2026"; // Unicode Character 'HORIZONTAL ELLIPSIS' (U+2026)
                 }
 
-                NSAttributedString *attributedTokenString = [[NSAttributedString alloc] initWithString:truncationTokenString attributes:tokenAttributes];
+                NSMutableAttributedString *attributedTokenString = [[NSMutableAttributedString alloc] initWithString:truncationTokenString attributes:defaultTokenAttributes];
+                [attributedTokenString addAttributes:tokenAttributes range:NSRangeFromString(self.trucationTokenAttributes[@"range"])];
+                
                 CTLineRef truncationToken = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)attributedTokenString);
                 
                 // Append truncationToken to the string
